@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Emotion Detector</title>
+  <style>
+    body { font-family: sans-serif; background: #0f0f0f; color: #eee; text-align: center; }
+    #wrapper { position: relative; display: inline-block; margin-top: 20px; }
+    video, canvas { border-radius: 12px; }
+    canvas { position: absolute; top: 0; left: 0; }
+    #status { margin-top: 10px; font-size: 14px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h2>Face Emotion Detector</h2>
+  <div id="wrapper">
+    <video id="video" width="640" height="480" autoplay muted></video>
+    <canvas id="overlay" width="640" height="480"></canvas>
+  </div>
+  <p id="status">Starting camera...</p>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const capture = document.createElement('canvas');
+    capture.width = 640; capture.height = 480;
+
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+      video.srcObject = stream;
+      document.getElementById('status').textContent = 'Camera active';
+      setInterval(detectEmotion, 1000);
+    });
+
+    async function detectEmotion() {
+      capture.getContext('2d').drawImage(video, 0, 0);
+      const base64 = capture.toDataURL('image/jpeg', 0.8);
+
+      const res = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64 })
+      });
+      const data = await res.json();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!data.faces || data.faces.length === 0) return;
+
+      data.faces.forEach(face => {
+        const [x, y, w, h] = face.box;
+        const label = `${face.dominant} (${Math.round(face.emotions[face.dominant] * 100)}%)`;
+
+        ctx.strokeStyle = '#00ff88';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        ctx.fillStyle = '#00ff88';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(label, x, y > 20 ? y - 8 : y + h + 20);
+      });
+    }
+  </script>
+</body>
+</html>
